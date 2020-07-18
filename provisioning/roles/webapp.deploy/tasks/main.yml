@@ -13,8 +13,7 @@
     delete: yes
     recursive: yes
     rsync_opts:
-      - "--exclude=initial-data/images"
-      - "--exclude=webapp/public/upload"
+      - "--exclude=public/upload"
 
 - name: Download image assets
   become: yes
