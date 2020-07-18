@@ -14,6 +14,11 @@ deploy: isucari
 	scp ./isucari isucon9-003:/home/isucon/isucari/webapp/go/isucari
 	ssh isucon9-003 'sudo systemctl start isucari.golang.service'
 
+.PHONY: restart
+restart
+	ssh isucon9-001 'sudo systemctl restart isucari.golang.service'
+	ssh isucon9-003 'sudo systemctl restart isucari.golang.service'
+
 .PHONY: initialize
 initialize:
 	scp ./initialize.json isucon9-001:/home/isucon/isucari/webapp/
