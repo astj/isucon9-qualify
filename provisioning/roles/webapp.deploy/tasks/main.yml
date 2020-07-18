@@ -12,6 +12,23 @@
     dest: /home/isucon/isucari/webapp
     delete: yes
     recursive: yes
+    rsync_opts:
+      - "--exclude=initial-data/images"
+      - "--exclude=webapp/public/upload"
+
+- name: Download image assets
+  become: yes
+  block:
+    - file:
+        path: /home/isucon/isucari/webapp/public/upload
+        state: directory
+    - unarchive:
+        remote_src: yes
+        src: https://github.com/isucon/isucon9-qualify/releases/download/v2/initial.zip
+        dest: /home/isucon/isucari/webapp/public/upload
+        creates: /home/isucon/isucari/webapp/public/upload/0a0b7d9d02859f66d171e4d2337aec2d.jpg
+        extra_opts:
+          - -j
 
 - name: Chown isucon
   become: yes
