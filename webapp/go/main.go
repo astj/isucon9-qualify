@@ -430,9 +430,38 @@ func getUserSimplesByIDs(q sqlx.Queryer, userIDMap map[int64]bool) (map[int64]Us
 	return userMap, err
 }
 
-func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err error) {
-	err = sqlx.Get(q, &category, "SELECT * FROM `categories` WHERE `id` = ?", categoryID)
-	if category.ParentID != 0 {
+func loadCategories(q sqlx.Queryer) (map[int]Category, error) {
+	categoriesMap := make(map[int]Category)
+	categories := []Category{}
+	err := sqlx.Select(q, &categories, "SELECT * from `categories`")
+	if err != nil {
+		return nil, err
+	}
+	for _, category := range categories {
+		categoriesMap[category.ID] = category
+	}
+	return categoriesMap, nil
+}
+
+var categoriesMap map[int]Category
+
+func getCategoryByID(q sqlx.Queryer, categoryID int) (Category, error) {
+	// 全部引いてインメモリキャッシュする。多分不変なはず
+	// TODO race 対策必要か？
+	var err error
+	if len(categoriesMap) == 0 {
+		categoriesMap, err = loadCategories(q)
+		if err != nil {
+			return Category{}, err
+		}
+	}
+
+	category, ok := categoriesMap[categoryID]
+	if !ok {
+		return category, fmt.Errorf("ohno")
+	}
+
+	if category.ParentID != 0 && category.ParentCategoryName == "" {
 		parentCategory, err := getCategoryByID(q, category.ParentID)
 		if err != nil {
 			return category, err
