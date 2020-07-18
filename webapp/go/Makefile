@@ -15,7 +15,7 @@ deploy: isucari
 	ssh isucon9-003 'sudo systemctl start isucari.golang.service'
 
 .PHONY: restart
-restart
+restart:
 	ssh isucon9-001 'sudo systemctl restart isucari.golang.service'
 	ssh isucon9-003 'sudo systemctl restart isucari.golang.service'
 
