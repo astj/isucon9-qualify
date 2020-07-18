@@ -59,7 +59,7 @@ const (
 	TransactionsPerPage = 10
 
 	BcryptCost = 10
-	Campaign   = 1
+	Campaign   = 4
 )
 
 var (
