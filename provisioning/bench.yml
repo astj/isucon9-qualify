@@ -20,6 +20,8 @@
     - external.nginx
     - external.benchmarker
     - external.benchmark-worker
+    - external.shipment
+    - external.payment
 
   tasks:
     - name: Start default daemons
@@ -32,3 +34,5 @@
         enabled: yes
       with_items:
         - nginx.service
+        - shipment.service
+        - payment.service
