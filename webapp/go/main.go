@@ -407,6 +407,29 @@ func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err
 	return userSimple, err
 }
 
+func getUserSimplesByIDs(q sqlx.Queryer, userIDMap map[int64]bool) (map[int64]UserSimple, error) {
+	userIDs := make([]int64, 0, len(userIDMap))
+	for id := range userIDMap {
+		userIDs = append(userIDs, id)
+	}
+
+	users := []User{}
+	sql, params, err := sqlx.In("SELECT * FROM `users` WHERE `id` IN (?)", userIDs)
+	err = sqlx.Select(q, &users, sql, params...)
+	if err != nil {
+		return nil, err
+	}
+	userMap := make(map[int64]UserSimple)
+	for _, user := range users {
+		userSimple := UserSimple{}
+		userSimple.ID = user.ID
+		userSimple.AccountName = user.AccountName
+		userSimple.NumSellItems = user.NumSellItems
+		userMap[user.ID] = userSimple
+	}
+	return userMap, err
+}
+
 func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err error) {
 	err = sqlx.Get(q, &category, "SELECT * FROM `categories` WHERE `id` = ?", categoryID)
 	if category.ParentID != 0 {
@@ -920,10 +943,29 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// user を N+1 しないように user だけ先に取ってくる
+	userIDMap := make(map[int64]bool)
+	for _, item := range items {
+		// seller か buyer のどちらかじ自分
+		if item.SellerID == user.ID {
+			userIDMap[item.BuyerID] = true
+		} else {
+			userIDMap[item.SellerID] = true
+		}
+	}
+	userIDMap[user.ID] = true
+	userMap, err := getUserSimplesByIDs(tx, userIDMap)
+	if err != nil {
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		tx.Rollback()
+		return
+	}
+
 	itemDetails := []ItemDetail{}
 	for _, item := range items {
-		seller, err := getUserSimpleByID(tx, item.SellerID)
-		if err != nil {
+		seller, ok := userMap[item.SellerID]
+		if !ok {
 			outputErrorMsg(w, http.StatusNotFound, "seller not found")
 			tx.Rollback()
 			return
@@ -955,8 +997,8 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if item.BuyerID != 0 {
-			buyer, err := getUserSimpleByID(tx, item.BuyerID)
-			if err != nil {
+			buyer, ok := userMap[item.BuyerID]
+			if !ok {
 				outputErrorMsg(w, http.StatusNotFound, "buyer not found")
 				tx.Rollback()
 				return
