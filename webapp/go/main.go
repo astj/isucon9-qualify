@@ -9,9 +9,11 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -280,6 +282,8 @@ func init() {
 }
 
 func main() {
+	runtime.SetBlockProfileRate(1)
+
 	host := os.Getenv("MYSQL_HOST")
 	if host == "" {
 		host = "127.0.0.1"
@@ -355,8 +359,17 @@ func main() {
 	mux.HandleFunc(pat.Get("/transactions/:transaction_id"), getIndex)
 	mux.HandleFunc(pat.Get("/users/:user_id"), getIndex)
 	mux.HandleFunc(pat.Get("/users/setting"), getIndex)
+
+	// pprof
+	mux.HandleFunc(pat.Get("/debug/pprof/"), pprof.Index)
+	mux.HandleFunc(pat.Get("/debug/pprof/cmdline"), pprof.Cmdline)
+	mux.HandleFunc(pat.Get("/debug/pprof/profile"), pprof.Profile)
+	mux.HandleFunc(pat.Get("/debug/pprof/symbol"), pprof.Symbol)
+	mux.HandleFunc(pat.Get("/debug/pprof/trace"), pprof.Trace)
+
 	// Assets
 	mux.Handle(pat.Get("/*"), http.FileServer(http.Dir("../public")))
+
 	log.Fatal(http.ListenAndServe(":8000", mux))
 }
 
