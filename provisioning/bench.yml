@@ -1,5 +1,7 @@
 - hosts: bench
-  user: root
+  user: ubuntu
+  become: yes
+  become_user: root
   gather_facts: yes
   vars:
     golang_version: 1.13
@@ -8,6 +10,7 @@
     - user.isucon
     - bootstrap
     - aliyun
+    - unzip
     - external.deploy
 
     - kernel-tune
