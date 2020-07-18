@@ -1005,6 +1005,28 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// transaction_evidences の N+1 を回避するためにさきにまとめて引く
+	// item_ids は絶対に unique なので map じゃなくて素朴にやってよい
+	itemIDs := make([]int64, len(items))
+	for i, item := range items {
+		itemIDs[i] = item.ID
+	}
+	transactionEvidences := []TransactionEvidence{}
+	s, params, err := sqlx.In("SELECT * FROM `transaction_evidences` WHERE `item_id` IN (?)", itemIDs)
+	err = sqlx.Select(tx, &transactionEvidences, s, params...)
+	// 全ての item の transaction_evidences が空と言うことはあり得る
+	if err != nil && err != sql.ErrNoRows {
+		// It's able to ignore ErrNoRows
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		tx.Rollback()
+		return
+	}
+	transactionEvidencesMap := make(map[int64]TransactionEvidence)
+	for _, transactionEvidence := range transactionEvidences {
+		transactionEvidencesMap[transactionEvidence.ItemID] = transactionEvidence
+	}
+
 	itemDetails := []ItemDetail{}
 	for _, item := range items {
 		seller, ok := userMap[item.SellerID]
@@ -1050,17 +1072,8 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			itemDetail.Buyer = &buyer
 		}
 
-		transactionEvidence := TransactionEvidence{}
-		err = tx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `item_id` = ?", item.ID)
-		if err != nil && err != sql.ErrNoRows {
-			// It's able to ignore ErrNoRows
-			log.Print(err)
-			outputErrorMsg(w, http.StatusInternalServerError, "db error")
-			tx.Rollback()
-			return
-		}
-
-		if transactionEvidence.ID > 0 {
+		transactionEvidence, ok := transactionEvidencesMap[item.ID]
+		if ok {
 			shipping := Shipping{}
 			err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidence.ID)
 			if err == sql.ErrNoRows {
