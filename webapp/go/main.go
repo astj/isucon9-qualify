@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"sync"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -1066,18 +1067,27 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		var wg sync.WaitGroup
+		var mu sync.Mutex
 		for _, shipping := range shippings {
-			ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
-				ReserveID: shipping.ReserveID,
-			})
-			if err != nil {
-				log.Print(err)
-				outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
-				tx.Rollback()
-				return
-			}
-			shippingStatusMap[shipping.ItemID] = ssr.Status
+			wg.Add(1)
+			go func(shipping Shipping) {
+				defer wg.Done()
+				ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
+					ReserveID: shipping.ReserveID,
+				})
+				if err != nil {
+					log.Print(err)
+					outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
+					tx.Rollback()
+					return
+				}
+				mu.Lock()
+				shippingStatusMap[shipping.ItemID] = ssr.Status
+				mu.Unlock()
+			}(shipping)
 		}
+		wg.Wait()
 	}
 
 	itemDetails := []ItemDetail{}
