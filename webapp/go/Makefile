@@ -13,10 +13,14 @@ deploy: isucari
 	ssh isucon9-003 'sudo systemctl stop isucari.golang.service'
 	scp ./isucari isucon9-003:/home/isucon/isucari/webapp/go/isucari
 	ssh isucon9-003 'sudo systemctl start isucari.golang.service'
+	ssh isucon9-002 'sudo systemctl stop isucari.golang.service'
+	scp ./isucari isucon9-002:/home/isucon/isucari/webapp/go/isucari
+	ssh isucon9-002 'sudo systemctl start isucari.golang.service'
 
 .PHONY: restart
 restart:
 	ssh isucon9-001 'sudo systemctl restart isucari.golang.service'
+	ssh isucon9-002 'sudo systemctl restart isucari.golang.service'
 	ssh isucon9-003 'sudo systemctl restart isucari.golang.service'
 
 .PHONY: initialize
