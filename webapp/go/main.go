@@ -643,10 +643,22 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// user を N+1 しないように user だけ先に取ってくる
+	userIDMap := make(map[int64]bool)
+	for _, item := range items {
+		userIDMap[item.SellerID] = true
+	}
+	userMap, err := getUserSimplesByIDs(dbx, userIDMap)
+	if err != nil {
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		return
+	}
+
 	itemSimples := []ItemSimple{}
 	for _, item := range items {
-		seller, err := getUserSimpleByID(dbx, item.SellerID)
-		if err != nil {
+		seller, ok := userMap[item.SellerID]
+		if !ok {
 			outputErrorMsg(w, http.StatusNotFound, "seller not found")
 			return
 		}
@@ -771,10 +783,22 @@ func getNewCategoryItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// user を N+1 しないように user だけ先に取ってくる
+	userIDMap := make(map[int64]bool)
+	for _, item := range items {
+		userIDMap[item.SellerID] = true
+	}
+	userMap, err := getUserSimplesByIDs(dbx, userIDMap)
+	if err != nil {
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		return
+	}
+
 	itemSimples := []ItemSimple{}
 	for _, item := range items {
-		seller, err := getUserSimpleByID(dbx, item.SellerID)
-		if err != nil {
+		seller, ok := userMap[item.SellerID]
+		if !ok {
 			outputErrorMsg(w, http.StatusNotFound, "seller not found")
 			return
 		}
