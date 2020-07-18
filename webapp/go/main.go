@@ -470,6 +470,26 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// user_transactions を埋める
+	// seller のほう
+	_, err = dbx.Exec(
+		"INSERT INTO `user_transactions` (`item_id`, `user_id`, `created_at`) SELECT `id` as `item_id`, `seller_id` as `user_id`, `created_at` from `items`",
+	)
+	if err != nil {
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	// buyer のほう
+	_, err = dbx.Exec(
+		"INSERT INTO `user_transactions` (`item_id`, `user_id`, `created_at`) SELECT `id` as `item_id`, `buyer_id` as `user_id`, `created_at` from `items` WHERE `buyer_id` <> 0",
+	)
+	if err != nil {
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		return
+	}
+
 	_, err = dbx.Exec(
 		"INSERT INTO `configs` (`name`, `val`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `val` = VALUES(`val`)",
 		"payment_service_url",
@@ -872,8 +892,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	if itemID > 0 && createdAt > 0 {
 		// paging
 		err := tx.Select(&items,
-			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) AND (`created_at` < ?  OR (`created_at` <= ? AND `id` < ?)) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
-			user.ID,
+			"SELECT items.* FROM `items` join `user_transactions` on items.id = user_transactions.item_id WHERE user_transactions.user_id = ? AND (user_transactions.created_at < ?  OR (user_transactions.created_at <= ? AND user_transactions.item_id < ?)) ORDER BY user_transactions.created_at DESC, user_transactions.item_id DESC LIMIT ?",
 			user.ID,
 			time.Unix(createdAt, 0),
 			time.Unix(createdAt, 0),
@@ -889,8 +908,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// 1st page
 		err := tx.Select(&items,
-			"SELECT * FROM `items` WHERE (`seller_id` = ? OR `buyer_id` = ?) ORDER BY `created_at` DESC, `id` DESC LIMIT ?",
-			user.ID,
+			"SELECT items.* FROM `items` join `user_transactions` on items.id = user_transactions.item_id WHERE user_transactions.user_id = ? ORDER BY user_transactions.created_at DESC, user_transactions.item_id DESC LIMIT ?",
 			user.ID,
 			TransactionsPerPage+1,
 		)
@@ -1361,6 +1379,18 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		buyer.ID,
 		ItemStatusTrading,
 		time.Now(),
+		targetItem.ID,
+	)
+	if err != nil {
+		log.Print(err)
+
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		tx.Rollback()
+		return
+	}
+	// buyer の user_transactions に追加する
+
+	_, err = tx.Exec("INSERT INTO `user_transactions` (`item_id`,`user_id`,`created_at`) SELECT `id` as `item_id`, `buyer_id` as `user_id`, `created_at` from `items` WHERE `id` = ?",
 		targetItem.ID,
 	)
 	if err != nil {
@@ -1988,8 +2018,18 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		return
 	}
-
 	itemID, err := result.LastInsertId()
+	if err != nil {
+		log.Print(err)
+
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		return
+	}
+
+	// user_transactionsににも追加する
+	_, err = tx.Exec("INSERT INTO `user_transactions` (`item_id`,`user_id`,`created_at`) SELECT `id` as `item_id`, `seller_id` as `user_id`, `created_at` from `items` WHERE `id` = ?",
+		itemID,
+	)
 	if err != nil {
 		log.Print(err)
 

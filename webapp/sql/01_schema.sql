@@ -35,6 +35,16 @@ CREATE TABLE `items` (
 create index `items_created_at` on `items` (`created_at`);
 create index `items_seller_id_status` on `items` (`seller_id`,`status`);
 
+DROP TABLE IF EXISTS `user_transactions`;
+CREATE TABLE `user_transactions` (
+  `id` bigint NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `item_id` bigint NOT NULL,
+  `user_id` bigint NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_item_id (`item_id`),
+  INDEX idx_user_id_created_at_item_id (`user_id`,`created_at`,`item_id`)
+);
+
 DROP TABLE IF EXISTS `transaction_evidences`;
 CREATE TABLE `transaction_evidences` (
   `id` bigint NOT NULL AUTO_INCREMENT PRIMARY KEY,
