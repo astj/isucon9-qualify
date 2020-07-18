@@ -1029,14 +1029,15 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// transaction_evidences の N+1 を回避するためにさきにまとめて引く
+	// transaction_evidences と関連する shippings の N+1 を回避するためにさきにまとめて引く
 	// item_ids は絶対に unique なので map じゃなくて素朴にやってよい
 	itemIDs := make([]int64, len(items))
 	for i, item := range items {
 		itemIDs[i] = item.ID
 	}
-	transactionEvidences := []TransactionEvidence{}
-	s, params, err := sqlx.In("SELECT * FROM `transaction_evidences` WHERE `item_id` IN (?)", itemIDs)
+	transactionEvidences := make([]TransactionEvidence, 0, len(items))
+	transactionEvidenceIDs := make([]int64, 0, len(items))
+	s, params, _ := sqlx.In("SELECT * FROM `transaction_evidences` WHERE `item_id` IN (?)", itemIDs)
 	err = sqlx.Select(tx, &transactionEvidences, s, params...)
 	// 全ての item の transaction_evidences が空と言うことはあり得る
 	if err != nil && err != sql.ErrNoRows {
@@ -1046,9 +1047,37 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		tx.Rollback()
 		return
 	}
-	transactionEvidencesMap := make(map[int64]TransactionEvidence)
+	transactionEvidencesMap := make(map[int64]TransactionEvidence) // ItemID
 	for _, transactionEvidence := range transactionEvidences {
 		transactionEvidencesMap[transactionEvidence.ItemID] = transactionEvidence
+		transactionEvidenceIDs = append(transactionEvidenceIDs, transactionEvidence.ID)
+	}
+
+	// 対応する	 shippings から status を取得する
+	shippings := []Shipping{}
+	shippingStatusMap := make(map[int64]string) // ItemID
+	if len(transactionEvidences) != 0 {
+		s, params, _ = sqlx.In("SELECT * FROM `shippings` WHERE `transaction_evidence_id` IN (?)", transactionEvidenceIDs)
+		err = sqlx.Select(tx, &shippings, s, params...)
+		if err != nil {
+			log.Print(err)
+			outputErrorMsg(w, http.StatusInternalServerError, "db error")
+			tx.Rollback()
+			return
+		}
+
+		for _, shipping := range shippings {
+			ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
+				ReserveID: shipping.ReserveID,
+			})
+			if err != nil {
+				log.Print(err)
+				outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
+				tx.Rollback()
+				return
+			}
+			shippingStatusMap[shipping.ItemID] = ssr.Status
+		}
 	}
 
 	itemDetails := []ItemDetail{}
@@ -1098,23 +1127,8 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 
 		transactionEvidence, ok := transactionEvidencesMap[item.ID]
 		if ok {
-			shipping := Shipping{}
-			err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidence.ID)
-			if err == sql.ErrNoRows {
-				outputErrorMsg(w, http.StatusNotFound, "shipping not found")
-				tx.Rollback()
-				return
-			}
-			if err != nil {
-				log.Print(err)
-				outputErrorMsg(w, http.StatusInternalServerError, "db error")
-				tx.Rollback()
-				return
-			}
-			ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
-				ReserveID: shipping.ReserveID,
-			})
-			if err != nil {
+			shippingStatus, ok := shippingStatusMap[item.ID]
+			if !ok {
 				log.Print(err)
 				outputErrorMsg(w, http.StatusInternalServerError, "failed to request to shipment service")
 				tx.Rollback()
@@ -1123,7 +1137,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 
 			itemDetail.TransactionEvidenceID = transactionEvidence.ID
 			itemDetail.TransactionEvidenceStatus = transactionEvidence.Status
-			itemDetail.ShippingStatus = ssr.Status
+			itemDetail.ShippingStatus = shippingStatus
 		}
 
 		itemDetails = append(itemDetails, itemDetail)
