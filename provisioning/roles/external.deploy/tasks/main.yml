@@ -16,7 +16,22 @@
       - "--exclude=.git"
       - "--exclude=.gitignore"
       - "--exclude=provisioning"
+      - "--exclude=initial-data/images"
       - "--exclude=webapp/public/upload"
+
+- name: Download image assets
+  become: yes
+  block:
+    - file:
+        path: /home/isucon/isucari/initial-data/images
+        state: directory
+    - unarchive:
+        remote_src: yes
+        src: https://github.com/isucon/isucon9-qualify/releases/download/v2/bench1.zip
+        dest: /home/isucon/isucari/initial-data/images
+        creates: /home/isucon/isucari/initial-data/images/6a0ac509966bb13b9ff29e3ed7dbcb7b.jpg
+        extra_opts:
+          - -j
 
 - name: Chown isucon
   become: yes
