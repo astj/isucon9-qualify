@@ -1,0 +1,4 @@
+{
+    "payment_service_url":"http://isucon9-bench:5555",
+    "shipment_service_url":"http://isucon9-bench:7000"
+  }
