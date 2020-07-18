@@ -57,6 +57,7 @@ const (
 	TransactionsPerPage = 10
 
 	BcryptCost = 10
+	Campaign   = 1
 )
 
 var (
@@ -565,7 +566,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 
 	res := resInitialize{
 		// キャンペーン実施時には還元率の設定を返す。詳しくはマニュアルを参照のこと。
-		Campaign: 1,
+		Campaign: Campaign,
 		// 実装言語を返す
 		Language: "Go",
 	}
