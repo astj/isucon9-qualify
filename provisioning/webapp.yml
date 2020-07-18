@@ -1,5 +1,7 @@
 - hosts: webapp
-  user: root
+  user: ubuntu
+  become: yes
+  become_user: root
   gather_facts: yes
 
   roles:
