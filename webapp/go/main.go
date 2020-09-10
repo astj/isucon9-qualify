@@ -2096,6 +2096,7 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 
 func postSell(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	txn := newrelic.FromContext(ctx)
 	csrfToken := r.FormValue("csrf_token")
 	name := r.FormValue("name")
 	description := r.FormValue("description")
@@ -2171,8 +2172,9 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 	}
 
 	imgName := fmt.Sprintf("%s%s", secureRandomStr(16), ext)
-	// TODO add segment
+	segment := txn.StartSegment("writeFile")
 	err = ioutil.WriteFile(fmt.Sprintf("../public/upload/%s", imgName), img, 0644)
+	segment.End()
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "Saving image failed")
@@ -2248,7 +2250,6 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 }
 
 func secureRandomStr(b int) string {
-	// TODO ここに segment
 	k := make([]byte, b)
 	if _, err := crand.Read(k); err != nil {
 		panic(err)
@@ -2422,8 +2423,10 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO ここ segment つくる
+	txn := newrelic.FromContext(ctx)
+	segment := txn.StartSegment("bcryptCompareHashAndPassword")
 	err = bcrypt.CompareHashAndPassword(u.HashedPassword, []byte(password))
+	segment.End()
 	if err == bcrypt.ErrMismatchedHashAndPassword {
 		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
 		return
@@ -2469,8 +2472,10 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO ここに segment
+	txn := newrelic.FromContext(ctx)
+	segment := txn.StartSegment("bcryptGenerateFromPassword")
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), BcryptCost)
+	segment.End()
 	if err != nil {
 		log.Print(err)
 
