@@ -21,6 +21,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
+	"github.com/newrelic/go-agent/v3/newrelic"
 	goji "goji.io"
 	"goji.io/pat"
 	"golang.org/x/crypto/bcrypt"
@@ -285,6 +286,11 @@ func init() {
 func main() {
 	runtime.SetBlockProfileRate(1)
 
+	app, _ := newrelic.NewApplication(
+		newrelic.ConfigAppName("isucon9-qualify (astj)"),
+		newrelic.ConfigLicense(os.Getenv("NEWRELIC_LICENSE_KEY")),
+		newrelic.ConfigDistributedTracerEnabled(true),
+	)
 	host := os.Getenv("MYSQL_HOST")
 	if host == "" {
 		host = "127.0.0.1"
@@ -328,24 +334,24 @@ func main() {
 	mux := goji.NewMux()
 
 	// API
-	mux.HandleFunc(pat.Post("/initialize"), postInitialize)
-	mux.HandleFunc(pat.Get("/new_items.json"), getNewItems)
-	mux.HandleFunc(pat.Get("/new_items/:root_category_id.json"), getNewCategoryItems)
-	mux.HandleFunc(pat.Get("/users/transactions.json"), getTransactions)
-	mux.HandleFunc(pat.Get("/users/:user_id.json"), getUserItems)
-	mux.HandleFunc(pat.Get("/items/:item_id.json"), getItem)
-	mux.HandleFunc(pat.Post("/items/edit"), postItemEdit)
-	mux.HandleFunc(pat.Post("/buy"), postBuy)
-	mux.HandleFunc(pat.Post("/sell"), postSell)
-	mux.HandleFunc(pat.Post("/ship"), postShip)
-	mux.HandleFunc(pat.Post("/ship_done"), postShipDone)
-	mux.HandleFunc(pat.Post("/complete"), postComplete)
-	mux.HandleFunc(pat.Get("/transactions/:transaction_evidence_id.png"), getQRCode)
-	mux.HandleFunc(pat.Post("/bump"), postBump)
-	mux.HandleFunc(pat.Get("/settings"), getSettings)
-	mux.HandleFunc(pat.Post("/login"), postLogin)
-	mux.HandleFunc(pat.Post("/register"), postRegister)
-	mux.HandleFunc(pat.Get("/reports.json"), getReports)
+	mux.HandleFunc(WrapHandleFunc(app, pat.Post("/initialize"), postInitialize))
+	mux.HandleFunc(WrapHandleFunc(app, pat.Get("/new_items.json"), getNewItems))
+	mux.HandleFunc(WrapHandleFunc(app, pat.Get("/new_items/:root_category_id.json"), getNewCategoryItems))
+	mux.HandleFunc(WrapHandleFunc(app, pat.Get("/users/transactions.json"), getTransactions))
+	mux.HandleFunc(WrapHandleFunc(app, pat.Get("/users/:user_id.json"), getUserItems))
+	mux.HandleFunc(WrapHandleFunc(app, pat.Get("/items/:item_id.json"), getItem))
+	mux.HandleFunc(WrapHandleFunc(app, pat.Post("/items/edit"), postItemEdit))
+	mux.HandleFunc(WrapHandleFunc(app, pat.Post("/buy"), postBuy))
+	mux.HandleFunc(WrapHandleFunc(app, pat.Post("/sell"), postSell))
+	mux.HandleFunc(WrapHandleFunc(app, pat.Post("/ship"), postShip))
+	mux.HandleFunc(WrapHandleFunc(app, pat.Post("/ship_done"), postShipDone))
+	mux.HandleFunc(WrapHandleFunc(app, pat.Post("/complete"), postComplete))
+	mux.HandleFunc(WrapHandleFunc(app, pat.Get("/transactions/:transaction_evidence_id.png"), getQRCode))
+	mux.HandleFunc(WrapHandleFunc(app, pat.Post("/bump"), postBump))
+	mux.HandleFunc(WrapHandleFunc(app, pat.Get("/settings"), getSettings))
+	mux.HandleFunc(WrapHandleFunc(app, pat.Post("/login"), postLogin))
+	mux.HandleFunc(WrapHandleFunc(app, pat.Post("/register"), postRegister))
+	mux.HandleFunc(WrapHandleFunc(app, pat.Get("/reports.json"), getReports))
 	// Frontend
 	mux.HandleFunc(pat.Get("/"), getIndex)
 	mux.HandleFunc(pat.Get("/login"), getIndex)
@@ -372,6 +378,32 @@ func main() {
 	mux.Handle(pat.Get("/*"), http.FileServer(http.Dir("../public")))
 
 	log.Fatal(http.ListenAndServe(":8000", mux))
+}
+
+// WrapHandle instruments http.Handler handlers with NewRelic Transactions.
+// originally https://github.com/newrelic/go-agent/blob/master/v3/newrelic/instrumentation.go#L31
+func WrapHandle(app *newrelic.Application, pattern *pat.Pattern, handler http.Handler) (*pat.Pattern, http.Handler) {
+	if app == nil {
+		return pattern, handler
+	}
+	return pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		txn := app.StartTransaction(r.Method + " " + pattern.String())
+		defer txn.End()
+
+		w = txn.SetWebResponse(w)
+		txn.SetWebRequestHTTP(r)
+
+		r = newrelic.RequestWithTransactionContext(r, txn)
+
+		handler.ServeHTTP(w, r)
+	})
+}
+
+// WrapHandleFunc instruments handler functions using NewRelic Transactions.
+// originally https://github.com/newrelic/go-agent/blob/master/v3/newrelic/instrumentation.go#L71
+func WrapHandleFunc(app *newrelic.Application, pattern *pat.Pattern, handler func(http.ResponseWriter, *http.Request)) (*pat.Pattern, func(http.ResponseWriter, *http.Request)) {
+	p, h := WrapHandle(app, pattern, http.HandlerFunc(handler))
+	return p, func(w http.ResponseWriter, r *http.Request) { h.ServeHTTP(w, r) }
 }
 
 func getSession(r *http.Request) *sessions.Session {
