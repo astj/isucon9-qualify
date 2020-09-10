@@ -1110,7 +1110,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			wg.Add(1)
 			go func(shipping Shipping) {
 				defer wg.Done()
-				ssr, err := APIShipmentStatus(getShipmentServiceURL(ctx), &APIShipmentStatusReq{
+				ssr, err := APIShipmentStatus(ctx, getShipmentServiceURL(ctx), &APIShipmentStatusReq{
 					ReserveID: shipping.ReserveID,
 				})
 				if err != nil {
@@ -1588,7 +1588,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scr, err := APIShipmentCreate(getShipmentServiceURL(ctx), &APIShipmentCreateReq{
+	scr, err := APIShipmentCreate(ctx, getShipmentServiceURL(ctx), &APIShipmentCreateReq{
 		ToAddress:   buyer.Address,
 		ToName:      buyer.AccountName,
 		FromAddress: seller.Address,
@@ -1602,7 +1602,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pstr, err := APIPaymentToken(getPaymentServiceURL(ctx), &APIPaymentServiceTokenReq{
+	pstr, err := APIPaymentToken(ctx, getPaymentServiceURL(ctx), &APIPaymentServiceTokenReq{
 		ShopID: PaymentServiceIsucariShopID,
 		Token:  rb.Token,
 		APIKey: PaymentServiceIsucariAPIKey,
@@ -1759,7 +1759,7 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	img, err := APIShipmentRequest(getShipmentServiceURL(ctx), &APIShipmentRequestReq{
+	img, err := APIShipmentRequest(ctx, getShipmentServiceURL(ctx), &APIShipmentRequestReq{
 		ReserveID: shipping.ReserveID,
 	})
 	if err != nil {
@@ -1891,7 +1891,7 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ssr, err := APIShipmentStatus(getShipmentServiceURL(ctx), &APIShipmentStatusReq{
+	ssr, err := APIShipmentStatus(ctx, getShipmentServiceURL(ctx), &APIShipmentStatusReq{
 		ReserveID: shipping.ReserveID,
 	})
 	if err != nil {
@@ -2032,7 +2032,7 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ssr, err := APIShipmentStatus(getShipmentServiceURL(ctx), &APIShipmentStatusReq{
+	ssr, err := APIShipmentStatus(ctx, getShipmentServiceURL(ctx), &APIShipmentStatusReq{
 		ReserveID: shipping.ReserveID,
 	})
 	if err != nil {
