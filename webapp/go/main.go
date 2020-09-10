@@ -552,6 +552,7 @@ func getIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func postInitialize(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	ri := reqInitialize{}
 
 	err := json.NewDecoder(r.Body).Decode(&ri)
@@ -560,7 +561,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd := exec.Command("../sql/init.sh")
+	cmd := exec.CommandContext(ctx, "../sql/init.sh")
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stderr
 	cmd.Run()
@@ -571,7 +572,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 
 	// user_transactions を埋める
 	// seller のほう
-	_, err = dbx.Exec(
+	_, err = dbx.ExecContext(ctx,
 		"INSERT INTO `user_transactions` (`item_id`, `user_id`, `created_at`) SELECT `id` as `item_id`, `seller_id` as `user_id`, `created_at` from `items`",
 	)
 	if err != nil {
@@ -580,7 +581,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// buyer のほう
-	_, err = dbx.Exec(
+	_, err = dbx.ExecContext(ctx,
 		"INSERT INTO `user_transactions` (`item_id`, `user_id`, `created_at`) SELECT `id` as `item_id`, `buyer_id` as `user_id`, `created_at` from `items` WHERE `buyer_id` <> 0",
 	)
 	if err != nil {
@@ -589,7 +590,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = dbx.Exec(
+	_, err = dbx.ExecContext(ctx,
 		"INSERT INTO `configs` (`name`, `val`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `val` = VALUES(`val`)",
 		"payment_service_url",
 		ri.PaymentServiceURL,
@@ -599,7 +600,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		return
 	}
-	_, err = dbx.Exec(
+	_, err = dbx.ExecContext(ctx,
 		"INSERT INTO `configs` (`name`, `val`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `val` = VALUES(`val`)",
 		"shipment_service_url",
 		ri.ShipmentServiceURL,
