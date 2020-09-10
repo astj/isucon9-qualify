@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	crand "crypto/rand"
 	"database/sql"
 	"encoding/json"
@@ -25,7 +26,6 @@ import (
 	goji "goji.io"
 	"goji.io/pat"
 	"golang.org/x/crypto/bcrypt"
-	"golang.org/x/net/context"
 )
 
 const (
